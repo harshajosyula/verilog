@@ -1,115 +1,159 @@
-//testbench for normalisation
-`timescale 1ns/1ps
+`timescale 1ns / 1ps
 
-module normalisation_tb();
+module tb_multiplier;
 
     // Inputs
-    reg [47:0] multiplicationResult;
+    reg [31:0] x;
+    reg [31:0] y;
 
-    // DUT outputs
-    wire [23:0] normalisedResult;
-    wire [2:0]  exponentInc;
+    // Outputs
+    wire [31:0] k;
 
-    // Expected reference values
-    reg [23:0] expected_normalised;
-    reg [2:0]  expected_exponentInc;
+    // Test variables
+    real real_x, real_y, real_result, real_expected;
+    integer passed, failed, total;
+    integer test_num;
 
-    integer i;
-    integer errors;
-
-    // Instantiate DUT
-    normalisation uut (
-        .multiplicationResult(multiplicationResult),
-        .normalisedResult(normalisedResult),
-        .exponentInc(exponentInc)
+    // Instantiate the multiplier
+    multiplier uut (
+        .x(x),
+        .y(y),
+        .k(k)
     );
 
-
-    // Reference logic procedure
-    task compute_expected;
-        input [47:0] in;
-        reg [23:0] beforeRound;
-        reg guardBit, roundBit, stickyBit;
-        reg [24:0] afterRound;
+    // Function to convert 32-bit IEEE 754 to real
+    function real fp32_to_real;
+        input [31:0] fp;
+        real mantissa;
+        integer exponent;
+        integer sign;
         begin
+            sign = fp[31];
+            exponent = fp[30:23] - 127;
+            mantissa = 1.0 + ($itor(fp[22:0]) / $itor(2**23));
+            fp32_to_real = (sign ? -1.0 : 1.0) * mantissa * (2.0 ** exponent);
+        end
+    endfunction
 
-            // Determine which shift case
-            if (~in[47])
-                beforeRound = in[46:23];
+    // Task to test multiplication
+    task test_mult;
+        input [31:0] a, b;
+        real expected, result, rel_error, abs_error;
+        reg pass;
+        begin
+            x = a;
+            y = b;
+            #10;
+
+            real_x = fp32_to_real(x);
+            real_y = fp32_to_real(y);
+            expected = real_x * real_y;
+            result = fp32_to_real(k);
+
+            abs_error = $abs(result - expected);
+            if (expected != 0.0)
+                rel_error = abs_error / $abs(expected) * 100.0;
             else
-                beforeRound = in[47:24] >> 1;
+                rel_error = abs_error;
 
-            guardBit  = (in[47]) ? in[23] : in[22];
-            roundBit  = (in[47]) ? in[22] : in[21];
-            stickyBit = (in[47]) ? (|in[22:0]) : (|in[20:0]);
+            // Pass criteria: relative error < 0.01% OR absolute error < 1e-6
+            pass = (rel_error < 0.01 || abs_error < 1e-6);
 
-            if (guardBit && (roundBit || stickyBit))
-                afterRound = beforeRound + 1;
+            if (pass)
+                passed = passed + 1;
             else
-                afterRound = beforeRound;
+                failed = failed + 1;
 
-            // Final normalization
-            if (afterRound[24] == 1'b1) begin
-                expected_normalised = afterRound[24:1];
-                expected_exponentInc = (in[47]) ? 2 : 1;
-            end else begin
-                expected_normalised = afterRound[23:0];
-                expected_exponentInc = (in[47]) ? 1 : 0;
-            end
+            $display("%-4d | %8h | %8h | %8f | %8f | %s",
+                     test_num, x, y, expected, result, pass ? "PASS" : "FAIL");
+
+            test_num = test_num + 1;
+            total = total + 1;
         end
     endtask
 
-
-    // Test process
     initial begin
 
-        $display("\n===============================================");
-        $display(" NORMALISATION UNIT TEST (48-bit → 24-bit) ");
-        $display("===============================================");
-        $display("Test   Input (Hex)     Expected       Actual    ExpInc | Result");
-        $display("----------------------------------------------------------------");
+        $dumpfile("wave.vcd");
+        $dumpvars(0, tb_multiplier);
 
-        errors = 0;
+        passed = 0;
+        failed = 0;
+        total = 0;
+        test_num = 0;
 
-        // Run 15 test patterns (mix random + edge cases)
-        for (i = 0; i < 15; i = i + 1) begin
-            case(i)
-                0: multiplicationResult = 48'h8000_00000000;
-                1: multiplicationResult = 48'h4000_00000000;
-                2: multiplicationResult = 48'h7FFF_FFFFFFFF;
-                3: multiplicationResult = 48'h0000_00000001;
-                4: multiplicationResult = 48'h00FF_F0000000;
-                default: multiplicationResult = $random;
-            endcase
+        $display("========================================");
+        $display("Floating-Point Multiplier Testbench");
+        $display("========================================");
+        $display("Test | A        | B        | Expected | Actual   | Status");
+        $display("-------------------------------------------------------");
 
-            #5 compute_expected(multiplicationResult);
+        // Test 1: Simple positive numbers
+test_mult(32'h3F800000, 32'h3F800000); // 1.0 * 1.0 = 1.0
+        test_mult(32'h40000000, 32'h40000000); // 2.0 * 2.0 = 4.0
+        test_mult(32'h40000000, 32'h40400000); // 2.0 * 3.0 = 6.0
+        test_mult(32'h40400000, 32'h40400000); // 3.0 * 3.0 = 9.0
+        test_mult(32'h40800000, 32'h40000000); // 4.0 * 2.0 = 8.0
+        test_mult(32'h40A00000, 32'h40C00000); // 5.0 * 6.0 = 30.0
+        test_mult(32'h41200000, 32'h41200000); // 10.0 * 10.0 = 100.0
 
-            if ((normalisedResult !== expected_normalised) ||
-                (exponentInc !== expected_exponentInc)) begin
+        // Test 2: Negative numbers
+        test_mult(32'hC0000000, 32'h40400000); // -2.0 * 3.0 = -6.0
+        test_mult(32'hC0000000, 32'hC0400000); // -2.0 * -3.0 = 6.0
+        test_mult(32'h3F800000, 32'hBF800000); // 1.0 * -1.0 = -1.0
+        test_mult(32'hC0A00000, 32'hC0C00000); // -5.0 * -6.0 = 30.0
 
-                $display("%2d   %h   %h/%0d     %h/%0d     FAIL ❌",
-                    i, multiplicationResult,
-                    expected_normalised, expected_exponentInc,
-                    normalisedResult, exponentInc);
+        // Test 3: Fractional numbers
+        test_mult(32'h3F000000, 32'h3F000000); // 0.5 * 0.5 = 0.25
+        test_mult(32'h3E800000, 32'h3F000000); // 0.25 * 0.5 = 0.125
+        test_mult(32'h3E800000, 32'h3E800000); // 0.25 * 0.25 = 0.0625
+        test_mult(32'h3F000000, 32'h40000000); // 0.5 * 2.0 = 1.0
 
-                errors = errors + 1;
+        // Test 4: Powers of 2 (should be exact)
+        test_mult(32'h41000000, 32'h40800000); // 8.0 * 4.0 = 32.0
+        test_mult(32'h41800000, 32'h41000000); // 16.0 * 8.0 = 128.0
+        test_mult(32'h3E800000, 32'h3E800000); // 0.25 * 0.25 = 0.0625
+        test_mult(32'h3E000000, 32'h3F000000); // 0.125 * 0.5 = 0.0625
 
-            end else begin
-                $display("%2d   %h   %h/%0d     %h/%0d     PASS ✅",
-                    i, multiplicationResult,
-                    expected_normalised, expected_exponentInc,
-                    normalisedResult, exponentInc);
-            end
-        end
+        // Test 5: Large numbers
+        test_mult(32'h42C80000, 32'h42480000); // 100.0 * 50.0 = 5000.0
+        test_mult(32'h461C4000, 32'h42C80000); // 10000.0 * 100.0 = 1000000.0
+        test_mult(32'h4B189680, 32'h3F800000); // 10000000.0 * 1.0 = 10000000.0
 
-        $display("\n================== SUMMARY ==================");
+        // Test 6: Small numbers
+        test_mult(32'h3C23D70A, 32'h3C23D70A); // 0.01 * 0.01 = 0.0001
+        test_mult(32'h3A83126F, 32'h3C23D70A); // 0.001 * 0.01 = 0.00001
 
-        if (errors == 0)
-            $display("✔ All %0d tests PASSED!", i);
+        // Test 7: Mixed magnitude
+        test_mult(32'h42C80000, 32'h3F800000); // 100.0 * 1.0 = 100.0
+        test_mult(32'h447A0000, 32'h3F000000); // 1000.0 * 0.5 = 500.0
+        test_mult(32'h41200000, 32'h3F000000); // 10.0 * 0.5 = 5.0
+
+        // Test 8: More combinations
+        test_mult(32'h40E00000, 32'h40A00000); // 7.0 * 5.0 = 35.0
+        test_mult(32'h41100000, 32'h40E00000); // 9.0 * 7.0 = 63.0
+        test_mult(32'h3FC00000, 32'h40200000); // 1.5 * 2.5 = 3.75
+        test_mult(32'h40100000, 32'h40300000); // 2.25 * 2.75 = 6.1875
+
+        // Test 5: Large numbers
+        test_mult(32'h42C80000, 32'h42480000); // 100.0 * 50.0 = 5000.0
+
+
+        // Summary
+        $display("-------------------------------------------------------");
+        $display("\n========================================");
+        $display("Test Summary");
+        $display("========================================");
+        $display("Total Tests: %0d", total);
+        $display("Passed:      %0d", passed);
+        $display("Failed:      %0d", failed);
+        $display("Pass Rate:   %.2f%%", (passed * 100.0) / total);
+        $display("========================================\n");
+
+        if (failed == 0)
+            $display("All tests PASSED!");
         else
-            $display("❌ %0d tests FAILED!", errors);
-
-        $display("=============================================\n");
+            $display("%0d test(s) FAILED", failed);
 
         $finish;
     end
