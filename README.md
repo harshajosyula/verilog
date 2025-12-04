@@ -27,3 +27,11 @@ if after dot bit a23 =0 ----> 1
             any of other bits are 1 
 
             total >0.5 ---> roundoff required
+
+
+
+4 dec 2025
+
+added the zero special case i.e multiplication with zero.
+Code is not synthesizable due to the for loop ---> modify the for and every thing will work fine when synthesizing.
+End of the multiplier as I am not interested in adding further special case handling

@@ -27,7 +27,11 @@ normalisation norm(
 
 wire [7:0] output_exp = x[30:23] + y[30:23] -8'd127 + inc;
 
-assign k = (~rounding_value) ? {sign,output_exp,mantissa[23:1]} : {sign,output_exp,mantissa[22:0]};
+wire exp_Zero = (x[30:23] == 0 ) || (y[30:23] ==0);
+
+wire mantissa_zero = (x[22:0]==0) || (y[22:0]==0) ;
+
+assign k =   (exp_Zero && mantissa_zero) ?  {sign,31'd0}   : (~rounding_value) ? {sign,output_exp,mantissa[23:1]} : {sign,output_exp,mantissa[22:0]};
 
 endmodule;
 
