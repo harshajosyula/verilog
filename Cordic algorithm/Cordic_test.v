@@ -4,7 +4,7 @@ module cordicTestbench;
     // Inputs
     reg clk;
     reg reset;
-    reg signed [19:0] angle;
+    reg signed [20:0] angle;
 
     // Outputs
     wire [11:0] sine;
@@ -39,26 +39,26 @@ module cordicTestbench;
 
     // Task to test CORDIC algorithm
     task testCORDIC_algo;
-        input signed [19:0] test_angle;
+        input signed [20:0] test_angle;
         real sin_value, cosin_value;
         begin
             angle = test_angle;
             #20; // Wait for 2 clock cycles for angle to be loaded
 
             // Wait for CORDIC pipeline to complete (need enough cycles for all iterations)
-            #200; // 12 clock cycles total should be sufficient
+            #250;
 
             // Convert fixed-point angle to decimal
-            angle_in_decimal = angle[18] * 64 + angle[17] * 32 + angle[16] * 16
+            angle_in_decimal =  angle[19] * 128 +angle[18] * 64 + angle[17] * 32 + angle[16] * 16
                              + angle[15] * 8  + angle[14] * 4  + angle[13] * 2
                              + angle[12] * 1   + angle[11] * 0.5  + angle[10] * 0.25
                              + angle[9] * 0.125 + angle[8] * 0.0625 + angle[7] * 0.03125
                              + angle[6] *(2.0 ** -6) + angle[5] * (2.0 ** -7) + angle[4] * (2.0 ** -8)
                              + angle[3] * (2.0 ** -9) + angle[2] * (2.0 ** -10) + angle[1] * (2.0 ** -11)
-                             + angle[0] * (2.0 ** -12);
+                             + angle[0] * (2.0 ** -12) ;
 
             // Apply sign bit if negative
-            if (angle[19])
+            if (angle[20])
                 angle_in_decimal = -angle_in_decimal;
 
             sin_value = 0.6073 * generateValues(sine);
@@ -86,15 +86,15 @@ module cordicTestbench;
         $display("Angle       | sine       | cosine ");
         $display("----------------------------------------");
 
-       testCORDIC_algo(20'b00000000000000000000); // 0 degrees
-       testCORDIC_algo(20'b00011110000000000000); // 30 degrees
-       testCORDIC_algo(20'b00111100000000000000); // 60 degrees
-       testCORDIC_algo(20'b01011010000000000000); // 90 degrees
-       testCORDIC_algo(20'b00001111000000000000); // 15 degrees
-       testCORDIC_algo(20'b00101101000000000000); // 45 degrees
-       testCORDIC_algo(20'b10011110000000000000); // -30 degrees
-       testCORDIC_algo(20'b10111100000000000000); // -60 degrees
-       testCORDIC_algo(20'b11011010000000000000); // -90 degrees
+       testCORDIC_algo(21'b000000000000000000000); // 0 degrees
+       testCORDIC_algo(21'b000011110000000000000); // 30 degrees
+       testCORDIC_algo(21'b000111100000000000000); // 60 degrees
+       testCORDIC_algo(21'b001011010000000000000); // 90 degrees
+       testCORDIC_algo(21'b000001111000000000000); // 15 degrees
+       testCORDIC_algo(21'b000101101000000000000); // 45 degrees
+       testCORDIC_algo(21'b001111000000000000000); // 120 degrees
+       testCORDIC_algo(21'b001101001000000000000);
+       testCORDIC_algo(21'b010110100000000000000);
 
         #50;
         $finish;
