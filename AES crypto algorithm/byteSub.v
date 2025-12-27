@@ -6,7 +6,7 @@
 
 module byteSub(
 
-    input wire[7:0] plaintext,
+    input wire[7:0] text,
     output wire[7:0] substitutedText
 );
 
@@ -51,6 +51,6 @@ sbox[253]=8'h54;sbox[254]=8'hbb;sbox[255]=8'h16;
 end
 
 
-assign substitutedText = sbox[plaintext];
+assign substitutedText = sbox[text];
 
 endmodule
