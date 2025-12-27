@@ -1,3 +1,3 @@
 Advanced encryption Standard  cyrptogrphy algorithm 
 
-in progess...
+Verilog implementation of AES algorithm
