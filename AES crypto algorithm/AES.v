@@ -161,6 +161,13 @@ shiftRows ins1(
     .shiftedRows(shiftedRowArray)
 );
 
+wire [127:0] mixedText;
+
+MixCols(
+    .shiftedText(shiftedRowArray),
+    .mixedCols(mixedText)
+);
+
 
 
 endmodule
